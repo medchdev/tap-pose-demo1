@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TAP Pose Tracker</title>
+  <!-- MediaPipe Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+  <!-- Favicon Link -->
+  <link rel="icon" href="favicon.ico">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 10px;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    video {
+      display: none;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>TAP Pose Tracker</h1>
+  <div id="info">Loading...</div>
+  <video id="videoInput"></video>
+  <canvas id="outputCanvas" width="1280" height="720"></canvas>
+
+  <script>
+    const videoElement = document.getElementById('videoInput');
+    const canvasElement = document.getElementById('outputCanvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const info = document.getElementById('info');
+
+    let lastTime = Date.now();
+    let fps = 0;
+
+    const pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+
+    pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+
+    pose.onResults(results => {
+      // Calculate FPS
+      const now = Date.now();
+      fps = Math.round(1000 / (now - lastTime));
+      lastTime = now;
+
+      // Clear canvas
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      
+      // Draw background (blur effect idea)
+      canvasCtx.globalAlpha = 0.9;
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.globalAlpha = 1.0;
+
+      // Draw pose landmarks and connectors
+      if (results.poseLandmarks) {
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+          { color: '#00FFEA', lineWidth: 5 });
+        drawLandmarks(canvasCtx, results.poseLandmarks,
+          { color: '#FF4F87', lineWidth: 2, radius: 5 });
+      }
+
+      canvasCtx.restore();
+
+      // Display FPS and confidence
+      const confidence = results.poseLandmarks ? results.poseLandmarks[0].visibility.toFixed(2) : 0;
+      info.innerHTML = `FPS: ${fps} <br> Confidence: ${confidence}`;
+    });
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await pose.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720
+    });
+    camera.start();
+  </script>
+</body>
+</html>
